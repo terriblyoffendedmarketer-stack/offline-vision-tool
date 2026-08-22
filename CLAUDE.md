@@ -4,88 +4,74 @@ Local Python service providing image analysis and UI verification without API co
 
 ## Status
 
-**Phase:** Not started — project spec ready, needs implementation.
+**Phase:** Core implementation complete — all 4 endpoints working, CLI and MCP server built.
 **Target machine:** M2 MacBook Air, 16GB unified memory.
-
-## Goal
-
-Replace expensive API-based vision (browser MCP screenshots cost 2,000-3,000 tokens each) with local models that run for free. Two use cases:
-1. **General:** UI verification, visual regression testing, screenshot analysis for any project
-2. **Specific:** Image quality scoring for the Comic Book Converter's benchmark (dithered output quality, text readability, contrast assessment)
+**Models:** CLIP ViT-B/32 + SmolVLM-500M-Instruct + SSIM math. Total ~1.1GB RAM when loaded.
 
 ## Architecture
 
-Background HTTP service on `localhost:9090` with these endpoints:
+Background HTTP service on `localhost:9090` with lazy-loaded ML models.
+
+### Models (simplified from original spec)
+
+| Model | RAM when loaded | Speed (M2 MPS) | Purpose |
+|-------|----------------|-----------------|---------|
+| CLIP ViT-B/32 | ~400 MB | ~20ms/image | Image-text similarity scoring |
+| SmolVLM-500M | ~600 MB | ~4s/query | Q&A, captioning, OCR, object detection |
+| SSIM | ~0 MB | ~5ms/pair | Perceptual image comparison |
+
+Original plan included Florence-2 and moondream2, but both are incompatible with
+Python 3.14 + transformers 5.x. SmolVLM handles all their tasks. See learnings.md.
 
 ### Endpoints
 
-- `POST /compare` — Before/after SSIM comparison with changed region detection
-  - Input: `{ "before": "path.png", "after": "path.png" }`
-  - Output: `{ "ssim": 0.94, "changed_regions": [...] }`
-
-- `POST /check` — Answer a question about an image (moondream)
-  - Input: `{ "image": "path.png", "query": "is there an error message?" }`
-  - Output: `{ "answer": "yes", "confidence": 0.92, "detail": "red text saying 'Failed to load'" }`
-
-- `POST /score` — CLIP similarity scoring against text descriptions
-  - Input: `{ "image": "path.png", "prompts": ["a blue button with white text", "a broken layout"] }`
-  - Output: `{ "scores": [0.87, 0.12] }`
-
-- `POST /caption` — Florence-2 image captioning and OCR
-  - Input: `{ "image": "path.png", "task": "caption" | "ocr" | "detect" }`
-  - Output: `{ "caption": "...", "objects": [...] }`
-
-- `GET /health` — Check which models are loaded and ready
-
-## Models
-
-| Model | Size on disk | RAM when loaded | Speed (M2) | Purpose |
-|-------|-------------|----------------|------------|---------|
-| CLIP ViT-B/32 | 340 MB | ~400 MB | 20ms/image | Image-text similarity scoring |
-| Florence-2-base | 450 MB | ~600 MB | 100ms/image | Captioning, OCR, object detection |
-| moondream 2B | 1.7 GB | ~2 GB | 1-2s/image | Answer any question about an image |
-| SSIM/LPIPS | ~50 MB | ~100 MB | 5ms/image | Perceptual quality comparison |
-
-Total: ~3GB RAM when all loaded. Fits comfortably in 16GB.
-
-## Use Cases
-
-### General (any project)
-- **UI verification:** Score a screenshot against "a properly laid out web page" vs "a broken page with overlapping elements"
-- **Visual regression:** SSIM compare before/after code changes, flag regions that changed
-- **Content check:** "Is there an error message visible?" "Does this form have 3 fields?"
-- **Replace browser MCP screenshots:** Call localhost instead of burning 2-3k tokens per screenshot
-
-### Comic Book Converter (Pass 2 of benchmark)
-- Score dithered output: CLIP similarity to "sharp readable manga page" vs "muddy unreadable page"
-- OCR check: Is text in speech bubbles still readable after dithering?
-- Florence-2 detail detection: Are fine lines preserved or lost?
-- Compare parameter combos with perceptual metrics beyond pure math
+- `POST /compare` — SSIM comparison with changed region detection
+- `POST /check` — Free-form visual Q&A (SmolVLM)
+- `POST /score` — CLIP similarity scoring against text prompts
+- `POST /caption` — Captioning, OCR, object detection (SmolVLM)
+- `GET /health` — Model status and uptime
 
 ## Roadmap
 
-1. [ ] Project setup — venv, requirements, basic Flask/FastAPI server
-2. [ ] SSIM/LPIPS endpoint — pure math, no model download needed
-3. [ ] CLIP integration — download model, load on startup, /score endpoint
-4. [ ] Florence-2 integration — /caption and /ocr endpoints
-5. [ ] moondream integration — /check endpoint for free-form questions
-6. [ ] Lazy loading — only load models on first use to save RAM
-7. [ ] CLI mode — `vision check image.png "is there an error?"` for quick one-offs
-8. [ ] Auto-start (launchd) — always available at localhost:9090
-9. [ ] MCP server wrapper — so Claude Code can call it directly as a tool
+1. [x] Project setup — venv, requirements, FastAPI server
+2. [x] SSIM/compare endpoint — pure math, ~5ms per comparison
+3. [x] CLIP /score endpoint — similarity scoring, ~20ms warm
+4. [x] SmolVLM /check endpoint — visual Q&A, ~4s warm
+5. [x] SmolVLM /caption endpoint — captioning/OCR/detect
+6. [x] Lazy loading — models load on first use, idle RAM ~50MB
+7. [x] CLI mode — `python cli.py check image.png "is there an error?"`
+8. [x] MCP server wrapper — Claude Code can call vision tools directly
+9. [ ] Auto-start (launchd) — run `bash install.sh`
+10. [ ] Global CLAUDE.md integration — tell Claude to prefer local vision tools
+11. [ ] Permission rules — auto-allow curl to localhost:9090
 
 ## Setup & Run
 
 ```bash
 cd "Offline Vision Tool"
-python3 -m venv venv
 source venv/bin/activate
-pip install -r requirements.txt
 python server.py
-# Service available at http://localhost:9090
+# Server at http://localhost:9090
+```
+
+### Full install (auto-start + Claude integration)
+
+```bash
+bash install.sh
 ```
 
 ## File Map
 
 - `CLAUDE.md` — this file
-- (files to be created during implementation)
+- `server.py` — FastAPI HTTP server, all endpoint routing
+- `models.py` — Lazy-loading model registry (CLIP, SmolVLM)
+- `endpoints/compare.py` — SSIM comparison with region detection
+- `endpoints/check.py` — SmolVLM visual Q&A
+- `endpoints/score.py` — CLIP similarity scoring
+- `endpoints/caption.py` — SmolVLM captioning/OCR/detect
+- `cli.py` — Command-line interface for quick queries
+- `mcp_server.py` — MCP server for Claude Code integration
+- `install.sh` — One-step installer (launchd + MCP registration)
+- `com.local.vision-tool.plist` — launchd service definition
+- `requirements.txt` — Python dependencies
+- `learnings.md` — Bug fixes and compatibility discoveries

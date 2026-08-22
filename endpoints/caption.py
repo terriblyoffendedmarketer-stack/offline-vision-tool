@@ -1,56 +1,56 @@
-# endpoints/caption.py — Florence-2 captioning, OCR, and object detection
+# endpoints/caption.py — Image captioning, OCR, and object detection via SmolVLM
 # Supports three tasks: caption, ocr, detect.
-# ~100ms per image on M2.
+# ~4s per image on M2 MPS (warm).
+#
+# Gotchas:
+# - Originally used Florence-2-base, but it's incompatible with transformers 5.x
+#   (Florence2LanguageConfig accesses forced_bos_token_id before super().__init__).
+# - SmolVLM-500M handles all three tasks via appropriate prompting.
 
 import time
 
 import torch
 from PIL import Image
 
-TASK_MAP = {
-    "caption": "<CAPTION>",
-    "ocr": "<OCR>",
-    "detect": "<OD>",
+TASK_PROMPTS = {
+    "caption": "Describe this image in one detailed sentence.",
+    "ocr": "Read and list all visible text in this image, exactly as shown.",
+    "detect": "List every distinct object you can see in this image with its approximate position (left/right/center, top/bottom).",
 }
 
 
 def run_caption(registry, image_path, task):
     t0 = time.perf_counter()
 
-    fl = registry.get_florence2()
-    model = fl["model"]
-    processor = fl["processor"]
-    device = fl["device"]
+    vlm = registry.get_smolvlm()
+    model = vlm["model"]
+    processor = vlm["processor"]
+    device = vlm["device"]
 
     image = Image.open(image_path).convert("RGB")
-    prompt = TASK_MAP[task]
+    prompt_text = TASK_PROMPTS[task]
 
-    inputs = processor(text=prompt, images=image, return_tensors="pt").to(device)
+    messages = [{"role": "user", "content": [
+        {"type": "image"},
+        {"type": "text", "text": prompt_text},
+    ]}]
+    prompt = processor.apply_chat_template(messages, add_generation_prompt=True)
+    inputs = processor(text=prompt, images=[image], return_tensors="pt").to(device)
 
     with torch.no_grad():
-        generated = model.generate(
-            input_ids=inputs["input_ids"],
-            pixel_values=inputs["pixel_values"],
-            max_new_tokens=1024,
-            num_beams=3,
-        )
+        out = model.generate(**inputs, max_new_tokens=500)
 
-    decoded = processor.batch_decode(generated, skip_special_tokens=False)[0]
-    parsed = processor.post_process_generation(decoded, task=prompt, image_size=image.size)
+    answer = processor.decode(out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
 
     elapsed = (time.perf_counter() - t0) * 1000
 
     result = {}
     if task == "caption":
-        result["caption"] = parsed.get("<CAPTION>", decoded)
+        result["caption"] = answer.strip()
     elif task == "ocr":
-        result["text"] = parsed.get("<OCR>", decoded)
+        result["text"] = answer.strip()
     elif task == "detect":
-        od = parsed.get("<OD>", {})
-        result["objects"] = []
-        if "bboxes" in od and "labels" in od:
-            for bbox, label in zip(od["bboxes"], od["labels"]):
-                result["objects"].append({"label": label, "bbox": bbox})
+        result["objects"] = answer.strip()
 
     return {
         "result": result,

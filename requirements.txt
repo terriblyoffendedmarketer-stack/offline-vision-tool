@@ -1,17 +1,16 @@
 # Server
 fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
+httpx2
 
 # Image processing & comparison
 Pillow>=10.0.0
 numpy>=2.0.0
 scikit-image>=0.24.0
 
-# ML models (installed but lazy-loaded at runtime)
+# ML models (lazy-loaded at runtime)
 torch>=2.4.0
 torchvision>=0.19.0
-transformers>=4.44.0
+transformers>=5.0.0
 open-clip-torch>=2.26.0
-
-# Perceptual quality metrics
-lpips>=0.1.4
+num2words

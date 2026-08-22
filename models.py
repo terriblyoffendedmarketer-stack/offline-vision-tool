@@ -1,6 +1,12 @@
 # models.py — Lazy-loading model registry
 # Tracks which models are loaded and loads them on first use.
-# Keeps idle RAM at ~50MB; full suite is ~3GB.
+# Keeps idle RAM at ~50MB; full suite is ~2GB.
+#
+# Gotchas:
+# - moondream2 is incompatible with Python 3.14 + transformers 5.x + MPS.
+#   Replaced with SmolVLM-500M-Instruct which works on all three.
+# - Florence-2 uses trust_remote_code=True (custom architecture).
+# - CLIP uses open_clip, not HuggingFace transformers.
 
 import threading
 
@@ -12,15 +18,13 @@ class ModelRegistry:
         self._models = {}
         self._locks = {
             "clip": threading.Lock(),
-            "florence2": threading.Lock(),
-            "moondream": threading.Lock(),
+            "smolvlm": threading.Lock(),
         }
 
     def status(self) -> dict[str, str]:
         return {
             "clip": "loaded" if "clip" in self._models else "not loaded",
-            "florence2": "loaded" if "florence2" in self._models else "not loaded",
-            "moondream": "loaded" if "moondream" in self._models else "not loaded",
+            "smolvlm": "loaded" if "smolvlm" in self._models else "not loaded",
             "ssim": "always available (no model needed)",
         }
 
@@ -31,19 +35,12 @@ class ModelRegistry:
                     self._models["clip"] = _load_clip()
         return self._models["clip"]
 
-    def get_florence2(self):
-        if "florence2" not in self._models:
-            with self._locks["florence2"]:
-                if "florence2" not in self._models:
-                    self._models["florence2"] = _load_florence2()
-        return self._models["florence2"]
-
-    def get_moondream(self):
-        if "moondream" not in self._models:
-            with self._locks["moondream"]:
-                if "moondream" not in self._models:
-                    self._models["moondream"] = _load_moondream()
-        return self._models["moondream"]
+    def get_smolvlm(self):
+        if "smolvlm" not in self._models:
+            with self._locks["smolvlm"]:
+                if "smolvlm" not in self._models:
+                    self._models["smolvlm"] = _load_smolvlm()
+        return self._models["smolvlm"]
 
 
 def _load_clip():
@@ -60,29 +57,15 @@ def _load_clip():
     return {"model": model, "preprocess": preprocess, "tokenizer": tokenizer, "device": device}
 
 
-def _load_florence2():
-    from transformers import AutoModelForCausalLM, AutoProcessor
+def _load_smolvlm():
+    from transformers import AutoModelForImageTextToText, AutoProcessor
     import torch
 
     device = "mps" if torch.backends.mps.is_available() else "cpu"
-    model_id = "microsoft/Florence-2-base"
-    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, trust_remote_code=True, torch_dtype=torch.float32
+    model_id = "HuggingFaceTB/SmolVLM-500M-Instruct"
+    processor = AutoProcessor.from_pretrained(model_id)
+    model = AutoModelForImageTextToText.from_pretrained(
+        model_id, dtype=torch.float32
     ).to(device).eval()
-    print(f"[models] Florence-2-base loaded on {device}")
+    print(f"[models] SmolVLM-500M-Instruct loaded on {device}")
     return {"model": model, "processor": processor, "device": device}
-
-
-def _load_moondream():
-    from transformers import AutoModelForCausalLM, AutoTokenizer
-    import torch
-
-    device = "mps" if torch.backends.mps.is_available() else "cpu"
-    model_id = "vikhyatk/moondream2"
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, trust_remote_code=True, torch_dtype=torch.float32
-    ).to(device).eval()
-    print(f"[models] moondream2 loaded on {device}")
-    return {"model": model, "tokenizer": tokenizer, "device": device}
