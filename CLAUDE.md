@@ -41,9 +41,10 @@ Python 3.14 + transformers 5.x. SmolVLM handles all their tasks. See learnings.m
 6. [x] Lazy loading — models load on first use, idle RAM ~50MB
 7. [x] CLI mode — `python cli.py check image.png "is there an error?"`
 8. [x] MCP server wrapper — Claude Code can call vision tools directly
-9. [ ] Auto-start (launchd) — run `bash install.sh`
-10. [ ] Global CLAUDE.md integration — tell Claude to prefer local vision tools
-11. [ ] Permission rules — auto-allow curl to localhost:9090
+9. [x] Auto-start (launchd) — run `bash install.sh`
+10. [x] Global CLAUDE.md integration — tell Claude to prefer local vision tools
+11. [x] Permission rules — auto-allow curl to localhost:9090
+12. [x] Portability — dynamic paths, setup_models.py, no hardcoded user dirs
 
 ## Setup & Run
 
@@ -71,7 +72,7 @@ bash install.sh
 - `endpoints/caption.py` — SmolVLM captioning/OCR/detect
 - `cli.py` — Command-line interface for quick queries
 - `mcp_server.py` — MCP server for Claude Code integration
-- `install.sh` — One-step installer (launchd + MCP registration)
-- `com.local.vision-tool.plist` — launchd service definition
+- `install.sh` — One-step installer (venv, models, launchd, MCP registration)
+- `setup_models.py` — Pre-downloads CLIP and SmolVLM models (~1GB)
 - `requirements.txt` — Python dependencies
 - `learnings.md` — Bug fixes and compatibility discoveries

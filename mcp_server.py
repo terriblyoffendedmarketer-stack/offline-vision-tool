@@ -137,7 +137,7 @@ def handle_request(request):
                 "jsonrpc": "2.0",
                 "id": req_id,
                 "result": {
-                    "content": [{"type": "text", "text": "Error: Vision tool server is not running at localhost:9090. Start it with: cd '/Users/apple/Documents/Claude Code/Offline Vision Tool' && source venv/bin/activate && python server.py"}],
+                    "content": [{"type": "text", "text": "Error: Vision tool server is not running at localhost:9090. Restart it with: launchctl load ~/Library/LaunchAgents/com.local.vision-tool.plist"}],
                     "isError": True,
                 },
             }

@@ -21,3 +21,9 @@ Bugs, fixes, and non-obvious discoveries. Format: `what broke | why | what fixed
 - SmolVLM form field counting is approximate | Returned "five" for 3 actual input fields (counted labels?) | Expect approximate answers for counting tasks
 - launchd KeepAlive works well — server auto-restarts on crash | Tested with plist install | Good for reliability
 - MCP server registered both project-scoped and user-scoped | `claude mcp add --scope user` for global | Available in all projects now
+
+## 2026-08-23 — Portability fixes
+
+- Static plist had hardcoded /Users/apple paths | Anyone cloning the repo would get wrong paths | install.sh now generates plist dynamically at install time using $PROJECT_DIR
+- mcp_server.py error message had hardcoded project path | Useless for other users | Changed to generic `launchctl load ~/Library/LaunchAgents/com.local.vision-tool.plist`
+- Missing setup_models.py | install.sh referenced it but file didn't exist | Created script that pre-downloads CLIP and SmolVLM with progress messages
