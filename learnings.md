@@ -16,3 +16,8 @@ Bugs, fixes, and non-obvious discoveries. Format: `what broke | why | what fixed
 - SmolVLM-500M-Instruct requires `num2words` package | ImportError at processor init | `pip install num2words`
 - SmolVLM-500M-Instruct works reliably on Python 3.14 + transformers 5.x + MPS | ~600MB RAM, ~4s/query warm, handles Q&A, caption, OCR | Best small VLM for this stack
 - Simplified from 4 models to 2 (CLIP + SmolVLM) + SSIM math | Total RAM ~1.1GB vs original 3GB estimate | Fewer compatibility headaches, still covers all use cases
+- SmolVLM-500M OCR is limited on small text | Only captured header text, missed form labels and error text on a test UI | Use /check with a targeted question for text reading instead of /caption ocr
+- CLIP first warm call is ~8s (model load from cache), subsequent calls ~140ms | open_clip model load from HF cache is slow | Expected, not a bug
+- SmolVLM form field counting is approximate | Returned "five" for 3 actual input fields (counted labels?) | Expect approximate answers for counting tasks
+- launchd KeepAlive works well — server auto-restarts on crash | Tested with plist install | Good for reliability
+- MCP server registered both project-scoped and user-scoped | `claude mcp add --scope user` for global | Available in all projects now
