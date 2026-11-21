@@ -47,10 +47,11 @@ echo "Python: $PY_VERSION ✓"
 if [ ! -f "$PYTHON_BIN" ]; then
     echo ""
     echo "1. Creating virtual environment..."
-    $PYTHON3 -m venv "$VENV_DIR"
+    # uv (not python -m venv + pip): packages are clones of the shared ~/.cache/uv store,
+    # so torch/transformers cost ~0 extra disk (see Mac Storage/MACHINE.md). Rebuilt this way 2026-11-21.
+    uv venv -q --python "$PYTHON3" "$VENV_DIR"
     echo "   Installing dependencies (this takes a few minutes)..."
-    "$PYTHON_BIN" -m pip install --upgrade pip -q
-    "$PYTHON_BIN" -m pip install -r "$PROJECT_DIR/requirements.txt" -q
+    VIRTUAL_ENV="$VENV_DIR" uv pip install -q -r "$PROJECT_DIR/requirements.txt"
     echo "   Dependencies installed ✓"
 else
     echo "1. Virtual environment exists ✓"
